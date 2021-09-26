@@ -10,7 +10,7 @@ model = dict(
     pretrained=None,
     backbone=dict(
         type='Unet',
-        encoder_name="efficientnet-b0"
+        encoder_name="efficientnet-b5"
 ),
     decode_head=dict(
         type='FCNHead',
