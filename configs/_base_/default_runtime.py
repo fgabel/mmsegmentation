@@ -9,6 +9,6 @@ log_config = dict(
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 load_from = None
-resume_from = None
-workflow = [('train', 1)]
+resume_from = None#'work_dirs/standard_unet/latest.pth'
+workflow = [('train', 1), ('val', 1)]
 cudnn_benchmark = True
