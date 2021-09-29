@@ -3,7 +3,7 @@ dataset_type = 'CustomDataset'
 
 data_root = 'data/'
 img_norm_cfg = dict(
-    mean=[0, 0, 0], std=[255, 255, 255], to_rgb=True)
+    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 crop_size = (448, 448)
 train_pipeline = [
     dict(type='LoadImageFromFile'),
@@ -21,14 +21,13 @@ test_pipeline = [
         # img_ratios=[0.5, 0.75, 1.0, 1.25, 1.5, 1.75],
         flip=False,
         transforms=[
-            dict(type='RandomFlip'),
             dict(type='Normalize', **img_norm_cfg),
             dict(type='ImageToTensor', keys=['img']),
             dict(type='Collect', keys=['img']),
         ])
 ]
 data = dict(
-    samples_per_gpu=4,
+    samples_per_gpu=8,
     workers_per_gpu=8,
     train=dict(
         type=dataset_type,
