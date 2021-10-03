@@ -12,8 +12,9 @@ from .swin import SwinTransformer
 from .unet import UNet
 from .vit import VisionTransformer
 from .qubvel_unet import Unet
+from .qubvel_unet_plusplus import UnetPlusPlus
 __all__ = [
     'ResNet', 'ResNetV1c', 'ResNetV1d', 'ResNeXt', 'HRNet', 'FastSCNN',
-    'ResNeSt', 'MobileNetV2', 'UNet', 'Unet','CGNet', 'MobileNetV3',
+    'ResNeSt', 'MobileNetV2', 'UNet', 'Unet', 'UnetPlusPlus', 'CGNet', 'MobileNetV3',
     'VisionTransformer', 'SwinTransformer', 'MixVisionTransformer'
 ]

@@ -68,7 +68,7 @@ class CenterBlock(nn.Sequential):
         super().__init__(conv1, conv2)
 
 @UPSAMPLE_LAYERS.register_module()
-class UnetDecoder(nn.Module):
+class UnetPlusPlusDecoder(nn.Module):
     def __init__(
             self,
             encoder_channels,
@@ -89,13 +89,11 @@ class UnetDecoder(nn.Module):
 
         encoder_channels = encoder_channels[1:]  # remove first skip with same spatial resolution
         encoder_channels = encoder_channels[::-1]  # reverse channels to start from head of encoder
-
         # computing blocks input and output channels
         head_channels = encoder_channels[0]
-        in_channels = [head_channels] + list(decoder_channels[:-1])
-        skip_channels = list(encoder_channels[1:]) + [0]
-        out_channels = decoder_channels
-
+        self.in_channels = [head_channels] + list(decoder_channels[:-1])
+        self.skip_channels = list(encoder_channels[1:]) + [0]
+        self.out_channels = decoder_channels
         if center:
             self.center = CenterBlock(
                 head_channels, head_channels, use_batchnorm=use_batchnorm
@@ -105,43 +103,58 @@ class UnetDecoder(nn.Module):
 
         # combine decoder keyword arguments
         kwargs = dict(use_batchnorm=use_batchnorm, attention_type=attention_type)
-        blocks = [
-            DecoderBlock(in_ch, skip_ch, out_ch, **kwargs)
-            for in_ch, skip_ch, out_ch in zip(in_channels, skip_channels, out_channels)
-        ]
-        self.blocks = nn.ModuleList(blocks)
+
+        blocks = {}
+        for layer_idx in range(len(self.in_channels) - 1):
+            for depth_idx in range(layer_idx+1):
+                if depth_idx == 0:
+                    in_ch = self.in_channels[layer_idx]
+                    skip_ch = self.skip_channels[layer_idx] * (layer_idx+1)
+                    out_ch = self.out_channels[layer_idx]
+                else:
+                    out_ch = self.skip_channels[layer_idx]
+                    skip_ch = self.skip_channels[layer_idx] * (layer_idx+1-depth_idx)
+                    in_ch = self.skip_channels[layer_idx - 1]
+                blocks[f'x_{depth_idx}_{layer_idx}'] = DecoderBlock(in_ch, skip_ch, out_ch, **kwargs)
+        blocks[f'x_{0}_{len(self.in_channels)-1}'] =\
+            DecoderBlock(self.in_channels[-1], 0, self.out_channels[-1], **kwargs)
+        self.blocks = nn.ModuleDict(blocks)
+        self.depth = len(self.in_channels) - 1
 
     def forward(self, *features):
 
         features = features[1:]    # remove first skip with same spatial resolution
         features = features[::-1]  # reverse channels to start from head of encoder
-
-        head = features[0]
-        skips = features[1:]
-
-        x = self.center(head)
-        dec_outs = [x]
-        for i, decoder_block in enumerate(self.blocks):
-            skip = skips[i] if i < len(skips) else None
-            x = decoder_block(x, skip)
-            dec_outs.append(x)
-
-        return dec_outs
+        # start building dense connections
+        dense_x = {}
+        for layer_idx in range(len(self.in_channels)-1):
+            for depth_idx in range(self.depth-layer_idx):
+                if layer_idx == 0:
+                    output = self.blocks[f'x_{depth_idx}_{depth_idx}'](features[depth_idx], features[depth_idx+1])
+                    dense_x[f'x_{depth_idx}_{depth_idx}'] = output
+                else:
+                    dense_l_i = depth_idx + layer_idx
+                    cat_features = [dense_x[f'x_{idx}_{dense_l_i}'] for idx in range(depth_idx+1, dense_l_i+1)]
+                    cat_features = torch.cat(cat_features + [features[dense_l_i+1]], dim=1)
+                    dense_x[f'x_{depth_idx}_{dense_l_i}'] =\
+                        self.blocks[f'x_{depth_idx}_{dense_l_i}'](dense_x[f'x_{depth_idx}_{dense_l_i-1}'], cat_features)
+        dense_x[f'x_{0}_{self.depth}'] = self.blocks[f'x_{0}_{self.depth}'](dense_x[f'x_{0}_{self.depth-1}'])
+        return [dense_x[f'x_{0}_{self.depth}']]
 
 @BACKBONES.register_module()
-class Unet(BaseModule, md.SegmentationModel):
-    """Unet_ is a fully convolution neural network for image semantic segmentation. Consist of *encoder* 
-    and *decoder* parts connected with *skip connections*. Encoder extract features of different spatial 
-    resolution (skip connections) which are used by decoder to define accurate segmentation mask. Use *concatenation*
-    for fusing decoder blocks with skip connections.
+class UnetPlusPlus(BaseModule, md.SegmentationModel):
+    """Unet++ is a fully convolution neural network for image semantic segmentation. Consist of *encoder*
+    and *decoder* parts connected with *skip connections*. Encoder extract features of different spatial
+    resolution (skip connections) which are used by decoder to define accurate segmentation mask. Decoder of
+    Unet++ is more complex than in usual Unet.
     Args:
         encoder_name: Name of the classification model that will be used as an encoder (a.k.a backbone)
             to extract features of different spatial resolution
-        encoder_depth: A number of stages used in encoder in range [3, 5]. Each stage generate features 
+        encoder_depth: A number of stages used in encoder in range [3, 5]. Each stage generate features
             two times smaller in spatial dimensions than previous one (e.g. for depth 0 we will have features
             with shapes [(N, C, H, W),], for depth 1 - [(N, C, H, W), (N, C, H // 2, W // 2)] and so on).
             Default is 5
-        encoder_weights: One of **None** (random initialization), **"imagenet"** (pre-training on ImageNet) and 
+        encoder_weights: One of **None** (random initialization), **"imagenet"** (pre-training on ImageNet) and
             other pretrained weights (see table with available weights for each encoder_name)
         decoder_channels: List of integers which specify **in_channels** parameter for convolutions used in decoder.
             Length of the list should be the same as **encoder_depth**
@@ -155,21 +168,21 @@ class Unet(BaseModule, md.SegmentationModel):
         activation: An activation function to apply after the final convolution layer.
             Available options are **"sigmoid"**, **"softmax"**, **"logsoftmax"**, **"tanh"**, **"identity"**, **callable** and **None**.
             Default is **None**
-        aux_params: Dictionary with parameters of the auxiliary output (classification head). Auxiliary output is build 
+        aux_params: Dictionary with parameters of the auxiliary output (classification head). Auxiliary output is build
             on top of encoder if **aux_params** is not **None** (default). Supported params:
                 - classes (int): A number of classes
                 - pooling (str): One of "max", "avg". Default is "avg"
                 - dropout (float): Dropout factor in [0, 1)
                 - activation (str): An activation function to apply "sigmoid"/"softmax" (could be **None** to return logits)
     Returns:
-        ``torch.nn.Module``: Unet
-    .. _Unet:
-        https://arxiv.org/abs/1505.04597
+        ``torch.nn.Module``: **Unet++**
+    Reference:
+        https://arxiv.org/abs/1807.10165
     """
 
     def __init__(
         self,
-        encoder_name: str = "efficientnet-b2",
+        encoder_name: str = "resnet34",
         encoder_depth: int = 5,
         encoder_weights: Optional[str] = "imagenet",
         decoder_use_batchnorm: bool = True,
@@ -189,7 +202,7 @@ class Unet(BaseModule, md.SegmentationModel):
             weights=encoder_weights,
         )
 
-        self.decoder = UnetDecoder(
+        self.decoder = UnetPlusPlusDecoder(
             encoder_channels=self.encoder.out_channels,
             decoder_channels=decoder_channels,
             n_blocks=encoder_depth,
@@ -197,7 +210,3 @@ class Unet(BaseModule, md.SegmentationModel):
             center=True if encoder_name.startswith("vgg") else False,
             attention_type=decoder_attention_type,
         )
-
-
-
-        self.name = "u-{}".format(encoder_name)
