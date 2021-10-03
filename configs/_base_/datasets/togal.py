@@ -3,13 +3,16 @@ dataset_type = 'CustomDataset'
 
 data_root = 'data/'
 img_norm_cfg = dict(
-    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
+    mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_rgb=True)
 crop_size = (448, 448)
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations'),
-    dict(type='RandomFlip', prob=0.5),
     dict(type='Normalize', **img_norm_cfg),
+    #dict(type='RGB2Gray')
+    dict(type='RandomRotate', prob=0.3, degree=180),
+    #dict(type='PhotoMetricDistortion', 
+    dict(type='RandomFlip', prob=0.5),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_semantic_seg']),
 ]
@@ -32,18 +35,18 @@ data = dict(
     train=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='images/training',
-        ann_dir='annotations/training',
+        img_dir='images/train',
+        ann_dir='annotations/train',
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='images/validation',
-        ann_dir='annotations/validation',
+        img_dir='images/val',
+        ann_dir='annotations/val',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='images/testing',
-        ann_dir='annotations/testing',
+        img_dir='images/test',
+        ann_dir='annotations/test',
         pipeline=test_pipeline))
