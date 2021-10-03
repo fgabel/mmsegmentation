@@ -176,7 +176,7 @@ class Unet(BaseModule, md.SegmentationModel):
         decoder_channels: List[int] = (256, 128, 64, 32, 16),
         decoder_attention_type: Optional[str] = None,
         in_channels: int = 3,
-        classes: int = 1,
+        classes: int = 2,
         activation: Optional[Union[str, callable]] = None,
         aux_params: Optional[dict] = None,
     ):

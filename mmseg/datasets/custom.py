@@ -77,7 +77,7 @@ class CustomDataset(Dataset):
     def __init__(self,
                  pipeline,
                  img_dir,
-                 img_suffix='.jpg',
+                 img_suffix='.png',
                  ann_dir=None,
                  seg_map_suffix='.png',
                  split=None,
@@ -85,7 +85,7 @@ class CustomDataset(Dataset):
                  test_mode=False,
                  ignore_index=255,
                  reduce_zero_label=False,
-                 classes=None,
+                 classes=["nowall", "wall"],
                  palette=None,
                  gt_seg_map_loader_cfg=None):
         self.pipeline = Compose(pipeline)
