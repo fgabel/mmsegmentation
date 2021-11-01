@@ -76,6 +76,17 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         self.loss_decode = build_loss(loss_decode)
         self.ignore_index = ignore_index
         self.align_corners = align_corners
+
+        if isinstance(loss_decode, dict):
+            self.loss_decode = build_loss(loss_decode)
+        elif isinstance(loss_decode, (list, tuple)):
+            self.loss_decode = nn.ModuleList()
+            for loss in loss_decode:
+                self.loss_decode.append(build_loss(loss))
+        else:
+            raise TypeError(f'loss_decode must be a dict or sequence of dict,\
+                but got {type(loss_decode)}')
+
         if sampler is not None:
             self.sampler = build_pixel_sampler(sampler, context=self)
         else:
@@ -225,10 +236,25 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         else:
             seg_weight = None
         seg_label = seg_label.squeeze(1)
-        loss['loss_seg'] = self.loss_decode(
-            seg_logit,
-            seg_label,
-            weight=seg_weight,
-            ignore_index=self.ignore_index)
+
+
+        if not isinstance(self.loss_decode, nn.ModuleList):
+            losses_decode = [self.loss_decode]
+        else:
+            losses_decode = self.loss_decode
+        for loss_decode in losses_decode:
+            if loss_decode.loss_name not in loss:
+                loss[loss_decode.loss_name] = loss_decode(
+                    seg_logit,
+                    seg_label,
+                    weight=seg_weight,
+                    ignore_index=self.ignore_index)
+            else:
+                loss[loss_decode.loss_name] += loss_decode(
+                    seg_logit,
+                    seg_label,
+                    weight=seg_weight,
+                    ignore_index=self.ignore_index)
+
         loss['acc_seg'] = accuracy(seg_logit, seg_label)
         return loss
