@@ -30,9 +30,11 @@ class EvalHook(_EvalHook):
                  by_epoch=False,
                  efficient_test=False,
                  pre_eval=False,
+                 tb_log_dir=None,
                  **kwargs):
         super().__init__(*args, by_epoch=by_epoch, **kwargs)
         self.pre_eval = pre_eval
+        self.tb_log_dir = tb_log_dir
         if efficient_test:
             warnings.warn(
                 'DeprecationWarning: ``efficient_test`` for evaluation hook '
@@ -48,6 +50,17 @@ class EvalHook(_EvalHook):
         from mmseg.apis import single_gpu_test
         results = single_gpu_test(
             runner.model, self.dataloader, show=False, pre_eval=self.pre_eval)
+        if tb_log_dir:
+            self.writer = SummaryWriter(self.tb_log_dir)
+            for i, data in enumerate(data_loader):
+                img_tensor = data['img'][0]
+                self.writer.add_images(
+                    'image/floorplan', np.asarray(img_tensor, np.uint8), runner.iter
+                )
+                self.writer.add_images(
+                    'image/segmap', np.asarray(img_tensor, np.uint8), runner.iter
+                )
+
         runner.log_buffer.clear()
         runner.log_buffer.output['eval_iter_num'] = len(self.dataloader)
         key_score = self.evaluate(runner, results)
