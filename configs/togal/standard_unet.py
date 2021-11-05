@@ -1,4 +1,4 @@
-wandb_project ='mmdetection'
+wandb_project ='mmsegmentation'
 wandb_experiment_name = 'test1delete'
 
 ######################################################################
@@ -10,7 +10,7 @@ lr_config = dict(policy='poly', power=0.9, min_lr=3e-6, by_epoch=False)
 # runtime settings
 runner = dict(type='IterBasedRunner', max_iters=400000)
 checkpoint_config = dict(by_epoch=False, interval=20000)
-evaluation = dict(interval=30000, metric='mIoU', pre_eval=False)
+evaluation = dict(interval=100, metric='mIoU', pre_eval=False, tb_log_dir="./work_dirs/tf_logs")
 
 ######################################################################
 # runtime settings
@@ -68,7 +68,7 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=2,
     workers_per_gpu=8,
     train=dict(
         type=dataset_type,

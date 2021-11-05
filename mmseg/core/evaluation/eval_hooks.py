@@ -6,7 +6,9 @@ import torch.distributed as dist
 from mmcv.runner import DistEvalHook as _DistEvalHook
 from mmcv.runner import EvalHook as _EvalHook
 from torch.nn.modules.batchnorm import _BatchNorm
-
+import numpy as np
+from torch import cat, unsqueeze, Tensor
+from tensorboardX import SummaryWriter
 
 class EvalHook(_EvalHook):
     """Single GPU EvalHook, with efficient test support.
@@ -30,11 +32,13 @@ class EvalHook(_EvalHook):
                  by_epoch=False,
                  efficient_test=False,
                  pre_eval=False,
-                 tb_log_dir=None,
+                 log_tb=True,
+                 log_wandb=True,
                  **kwargs):
         super().__init__(*args, by_epoch=by_epoch, **kwargs)
         self.pre_eval = pre_eval
-        self.tb_log_dir = tb_log_dir
+        self.log_tb = log_tb
+        self.log_wandb = log_wandb
         if efficient_test:
             warnings.warn(
                 'DeprecationWarning: ``efficient_test`` for evaluation hook '
@@ -50,20 +54,77 @@ class EvalHook(_EvalHook):
         from mmseg.apis import single_gpu_test
         results = single_gpu_test(
             runner.model, self.dataloader, show=False, pre_eval=self.pre_eval)
-        if tb_log_dir:
+        if self.log_tb:
+            import mmcv
+            self.file_client = mmcv.FileClient(backend='disk')
+            img_tensor_stack = None
+            segmap_tensor_stack = None
+            gt_tensor_stack = None
+
+            self.tb_log_dir = osp.join(runner.work_dir, 'tf_logs')
             self.writer = SummaryWriter(self.tb_log_dir)
-            for i, data in enumerate(data_loader):
-                img_tensor = data['img'][0]
-                self.writer.add_images(
-                    'image/floorplan', np.asarray(img_tensor, np.uint8), runner.iter
-                )
-                self.writer.add_images(
-                    'image/segmap', np.asarray(img_tensor, np.uint8), runner.iter
-                )
+            for i, data in enumerate(self.dataloader):
+                if i > 15:
+                    break
+                if img_tensor_stack is None:
+                    img_tensor_stack = data['img'][i]
+                    segmap_tensor_stack = unsqueeze(Tensor(results[i][1, ...]), 0)
+                    # annotations
+                    ann_filename = data['img_metas'][0].data[0][0]['filename'].replace('images', 'annotations')
+                    gt_bytes = self.file_client.get(ann_filename)
+                    gt_tensor_stack = mmcv.imfrombytes(gt_bytes, flag='unchanged', backend='cv2').squeeze().astype(np.uint8)
+                    gt_tensor_stack = unsqueeze(Tensor(gt_tensor_stack), 0)
+                else:
+                    # img
+                    img_tensor_stack = cat((img_tensor_stack, data['img'][0]), 0)
+                    # segmentation map
+                    #print(np.mean(results[i][1, ...]))
+                    segmap_tensor_stack = cat((segmap_tensor_stack, unsqueeze(Tensor(results[i][1, ...]), 0)), 0)
+                    # annotation
+                    ann_filename = data['img_metas'][0].data[0][0]['filename'].replace('images', 'annotations')
+                    gt_bytes = self.file_client.get(ann_filename)
+                    gt_tensor = mmcv.imfrombytes(gt_bytes, flag='unchanged', backend='cv2').squeeze().astype(np.uint8)
+                    gt_tensor_stack = cat((gt_tensor_stack, unsqueeze(Tensor(gt_tensor), 0)), 0)
+        import torch
+        print(segmap_tensor_stack)
+        print(torch.mean(segmap_tensor_stack))
+        segmap_tensor_stack = unsqueeze(segmap_tensor_stack, 1)
+        gt_tensor_stack = np.expand_dims(gt_tensor_stack, 1)
+
+        img_tensor_stack = np.asarray(img_tensor_stack*255, np.uint8)
+        segmap_tensor_stack = np.asarray(segmap_tensor_stack*255, np.uint8)
+        gt_tensor_stack = np.asarray(gt_tensor_stack, np.uint8)*255
+        self.writer.add_images(
+            'image/floorplan', img_tensor_stack, runner.iter
+        )
+        self.writer.add_images(
+            'image/segmap', segmap_tensor_stack, runner.iter
+        )
+        self.writer.add_images(
+            'image/annotation', gt_tensor_stack, runner.iter
+        )
+        if self.log_wandb:
+            import wandb
+            img_tensor_stack = np.moveaxis(img_tensor_stack, 1, 3)
+            # concatenate floor plans, segmaps and ground truth
+            for batch_idx in range(img_tensor_stack.shape[0]):
+                floorplans_wandb = img_tensor_stack[batch_idx,...]
+                segmap_wandb = np.repeat(np.expand_dims(segmap_tensor_stack[batch_idx,...], -1), 3, -1)
+                gt_wandb = np.repeat(np.expand_dims(gt_tensor_stack[batch_idx, ...], -1), 3, -1)
+
+                img_wandb = np.concatenate((floorplans_wandb, segmap_wandb[0,...], gt_wandb[0,...]), axis=1)
+                floorplans_wandb = wandb.Image(img_wandb, caption="Floorplan")
+
+                wandb.log({"floorplan": floorplans_wandb})
 
         runner.log_buffer.clear()
         runner.log_buffer.output['eval_iter_num'] = len(self.dataloader)
+
+        #apply argmax for evaluation
+        for i, res in enumerate(results):
+            results[i] = np.argmax(res, axis=0)
         key_score = self.evaluate(runner, results)
+
         if self.save_best:
             self._save_ckpt(runner, key_score)
 
