@@ -18,6 +18,7 @@ from mmseg.datasets import build_dataset
 from mmseg.models import build_segmentor
 from mmseg.utils import collect_env, get_root_logger
 
+import wandb
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a segmentor')
@@ -65,14 +66,15 @@ def parse_args():
 
 def main():
     args = parse_args()
-
+    print(args.config)
     cfg = Config.fromfile(args.config)
     if args.options is not None:
         cfg.merge_from_dict(args.options)
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
-
+    wandb.login(key="854c85e118ac311e04a52cdef94ec83e677f1ff7")
+    wandb.init(project =cfg.wandb_project, name = cfg.wandb_experiment_name)
     # work_dir is determined in this priority: CLI > segment in file > filename
     if args.work_dir is not None:
         # update configs according to CLI args if args.work_dir is not None
@@ -123,7 +125,7 @@ def main():
     # log some basic info
     logger.info(f'Distributed training: {distributed}')
     logger.info(f'Config:\n{cfg.pretty_text}')
-
+    wandb.save(args.config)
     # set random seeds
     if args.seed is not None:
         logger.info(f'Set random seed to {args.seed}, deterministic: '
