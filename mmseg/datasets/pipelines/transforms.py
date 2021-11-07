@@ -3,8 +3,144 @@ import mmcv
 import numpy as np
 from mmcv.utils import deprecated_api_warning, is_tuple_of
 from numpy import random
+try:
+    from imagecorruptions import corrupt
+except ImportError:
+    corrupt = None
 
 from ..builder import PIPELINES
+
+@PIPELINES.register_module()
+class Corrupt:
+    """Corruption augmentation.
+
+    Corruption transforms implemented based on
+    `imagecorruptions <https://github.com/bethgelab/imagecorruptions>`_.
+
+    Args:
+        corruption (str): Corruption name.
+        severity (int, optional): The severity of corruption. Default: 1.
+    """
+
+    def __init__(self, corruption, severity=1):
+        self.corruption = corruption
+        self.severity = severity
+
+    def __call__(self, results):
+        """Call function to corrupt image.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Result dict with images corrupted.
+        """
+
+        if corrupt is None:
+            raise RuntimeError('imagecorruptions is not installed')
+        if 'img_fields' in results:
+            assert results['img_fields'] == ['img'], \
+                'Only single img_fields is allowed'
+        results['img'] = corrupt(
+            results['img'].astype(np.uint8),
+            corruption_name=self.corruption,
+            severity=self.severity)
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(corruption={self.corruption}, '
+        repr_str += f'severity={self.severity})'
+        return repr_str
+
+
+@PIPELINES.register_module()
+class RandomBrightnessDecrease:
+    """Apply random brightness decreases, mostly to grayscale images (black on white mostly)
+
+    Args:
+        brightness_delta (int): delta of brightness.
+    """
+
+    def __init__(self,
+                 brightness_delta=50):
+        self.brightness_delta = brightness_delta
+
+    def __call__(self, results):
+        """Call function to perform photometric distortion on images.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Result dict with images distorted.
+        """
+
+        if 'img_fields' in results:
+            assert results['img_fields'] == ['img'], \
+                'Only single img_fields is allowed'
+        img = results['img']
+        # random brightness
+        if random.randint(2):
+            delta = random.uniform(0,
+                                   self.brightness_delta)
+            img += delta
+        img = np.clip(img, 0, 255)
+        results['img'] = img
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(\nbrightness_delta={self.brightness_delta},\n'
+        repr_str += 'contrast_range='
+        repr_str += f'{(self.contrast_lower, self.contrast_upper)},\n'
+        repr_str += 'saturation_range='
+        repr_str += f'{(self.saturation_lower, self.saturation_upper)},\n'
+        repr_str += f'hue_delta={self.hue_delta})'
+        return repr_str
+
+@PIPELINES.register_module()
+class Corrupt:
+    """Corruption augmentation.
+
+    Corruption transforms implemented based on
+    `imagecorruptions <https://github.com/bethgelab/imagecorruptions>`_.
+
+    Args:
+        corruption (str): Corruption name.
+        severity (int, optional): The severity of corruption. Default: 1.
+    """
+
+    def __init__(self, corruption, severity=1):
+        self.corruption = corruption
+        self.severity = severity
+
+    def __call__(self, results):
+        """Call function to corrupt image.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Result dict with images corrupted.
+        """
+
+        if corrupt is None:
+            raise RuntimeError('imagecorruptions is not installed')
+        if 'img_fields' in results:
+            assert results['img_fields'] == ['img'], \
+                'Only single img_fields is allowed'
+        results['img'] = corrupt(
+            results['img'].astype(np.uint8),
+            corruption_name=self.corruption,
+            severity=self.severity)
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(corruption={self.corruption}, '
+        repr_str += f'severity={self.severity})'
+        return repr_str
 
 
 @PIPELINES.register_module()
