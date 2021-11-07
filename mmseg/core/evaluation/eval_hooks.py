@@ -79,7 +79,6 @@ class EvalHook(_EvalHook):
                     # img
                     img_tensor_stack = cat((img_tensor_stack, data['img'][0]), 0)
                     # segmentation map
-                    #print(np.mean(results[i][1, ...]))
                     segmap_tensor_stack = cat((segmap_tensor_stack, unsqueeze(Tensor(results[i][1, ...]), 0)), 0)
                     # annotation
                     ann_filename = data['img_metas'][0].data[0][0]['filename'].replace('images', 'annotations')
@@ -88,9 +87,7 @@ class EvalHook(_EvalHook):
                     gt_tensor_stack = cat((gt_tensor_stack, unsqueeze(Tensor(gt_tensor), 0)), 0)
                 if gt_tensor_stack.shape[0] > 15:
                     break
-        import torch
-        #print(segmap_tensor_stack)
-        #print(torch.mean(segmap_tensor_stack))
+
         segmap_tensor_stack = unsqueeze(segmap_tensor_stack, 1)
         gt_tensor_stack = np.expand_dims(gt_tensor_stack, 1)
 

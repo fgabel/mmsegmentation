@@ -49,7 +49,7 @@ train_pipeline = [
     dict(type='Normalize', **img_norm_cfg),
     #dict(type='RGB2Gray')
     dict(type='RandomRotate', prob=0.3, degree=180),
-    #dict(type='PhotoMetricDistortion',
+    dict(type='Corrupt', prob = 0.5, corruption=['gaussian_blur', 'brightness', 'contrast', 'jpeg_compression', 'pixelate']),
     dict(type='RandomFlip', prob=0.5),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_semantic_seg']),
@@ -115,4 +115,4 @@ model = dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
     # model training and testing settings
     train_cfg=dict(),
-    test_cfg=dict(mode='slide', crop_size=(256, 256), stride=(170, 170)))
+    test_cfg=dict(mode='whole'))
