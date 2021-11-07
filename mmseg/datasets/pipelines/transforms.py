@@ -4,6 +4,7 @@ import numpy as np
 from mmcv.utils import deprecated_api_warning, is_tuple_of
 from numpy import random
 import random
+from PIL import Image
 try:
     from imagecorruptions import corrupt
 except ImportError:
@@ -43,10 +44,14 @@ class Corrupt:
             raise RuntimeError('imagecorruptions is not installed')
         if random.random() < self.prob:
             corruption = random.choice(self.corruption)
+            results['img'] = results['img']*255
             results['img'] = corrupt(
                 results['img'].astype(np.uint8),
                 corruption_name=corruption,
                 severity=self.severity)
+            # grayscale conversion
+            grayscale = Image.fromarray(results['img']).convert('L').convert('RGB')
+            results['img'] = np.array(grayscale)/255
             results['img'] = results['img'].astype(np.float32)
         return results
 
@@ -378,7 +383,6 @@ class RandomFlip(object):
             dict: Flipped results, 'flip', 'flip_direction' keys are added into
                 result dict.
         """
-
         if 'flip' not in results:
             flip = True if np.random.rand() < self.prob else False
             results['flip'] = flip
@@ -394,6 +398,7 @@ class RandomFlip(object):
                 # use copy() to make numpy stride positive
                 results[key] = mmcv.imflip(
                     results[key], direction=results['flip_direction']).copy()
+
         return results
 
     def __repr__(self):
