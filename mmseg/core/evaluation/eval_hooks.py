@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import os.path as osp
 import warnings
+import random
 
 import torch.distributed as dist
 from mmcv.runner import DistEvalHook as _DistEvalHook
@@ -64,10 +65,10 @@ class EvalHook(_EvalHook):
             self.tb_log_dir = osp.join(runner.work_dir, 'tf_logs')
             self.writer = SummaryWriter(self.tb_log_dir)
             for i, data in enumerate(self.dataloader):
-                if i > 15:
-                    break
+                if random.random() < 0.95:
+                    continue
                 if img_tensor_stack is None:
-                    img_tensor_stack = data['img'][i]
+                    img_tensor_stack = data['img'][0]
                     segmap_tensor_stack = unsqueeze(Tensor(results[i][1, ...]), 0)
                     # annotations
                     ann_filename = data['img_metas'][0].data[0][0]['filename'].replace('images', 'annotations')
@@ -85,9 +86,11 @@ class EvalHook(_EvalHook):
                     gt_bytes = self.file_client.get(ann_filename)
                     gt_tensor = mmcv.imfrombytes(gt_bytes, flag='unchanged', backend='cv2').squeeze().astype(np.uint8)
                     gt_tensor_stack = cat((gt_tensor_stack, unsqueeze(Tensor(gt_tensor), 0)), 0)
+                if gt_tensor_stack.shape[0] > 15:
+                    break
         import torch
-        print(segmap_tensor_stack)
-        print(torch.mean(segmap_tensor_stack))
+        #print(segmap_tensor_stack)
+        #print(torch.mean(segmap_tensor_stack))
         segmap_tensor_stack = unsqueeze(segmap_tensor_stack, 1)
         gt_tensor_stack = np.expand_dims(gt_tensor_stack, 1)
 
