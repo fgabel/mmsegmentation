@@ -1,16 +1,16 @@
 wandb_project ='mmsegmentation'
-wandb_experiment_name = 'Unet, EfficientNetV2-b2, more augments #2'
+wandb_experiment_name = 'ResNet50, PointRend finetuning, 2 classes'
 
 ######################################################################
 # optimizer
-optimizer = dict(type='Adam', lr=0.00012, weight_decay=0.00005)
+optimizer = dict(type='Adam', lr=0.0001, weight_decay=0.00005)
 optimizer_config = dict()
 # learning policy
 lr_config = dict(policy='exp', gamma=0.999994, by_epoch=False)
 # runtime settings
 runner = dict(type='IterBasedRunner', max_iters=300000)
 checkpoint_config = dict(by_epoch=False, interval=20000)
-evaluation = dict(interval=6000, metric='mIoU', pre_eval=False, tb_log_dir="./work_dirs/tf_logs")
+evaluation = dict(interval=5000, metric='mIoU', pre_eval=False, tb_log_dir="./work_dirs/tf_logs")
 
 ######################################################################
 # runtime settings
@@ -48,8 +48,8 @@ train_pipeline = [
     dict(type='LoadAnnotations'),
     dict(type='Normalize', **img_norm_cfg),
     #dict(type='RGB2Gray')
-    dict(type='RandomRotate', prob=0.1, degree=180),
-    dict(type='Corrupt', prob = 0.4, corruption=['gaussian_blur', 'gaussian_noise', 'shot_noise', 'brightness', 'contrast', 'jpeg_compression', 'pixelate']),
+    dict(type='RandomRotate', prob=0.2, degree=180),
+    dict(type='Corrupt', prob = 0.5, corruption=['gaussian_blur', 'gaussian_noise', 'shot_noise', 'brightness', 'contrast', 'jpeg_compression', 'pixelate']),
     dict(type='RandomFlip', prob=0.5),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_semantic_seg']),
@@ -97,22 +97,48 @@ model = dict(
     type='EncoderDecoder',
     pretrained=None,
     backbone=dict(
-        type='Unet',
-        encoder_name="tu-tf_efficientnetv2_b2"
-),
+        type='UNet',
+        in_channels=3,
+        base_channels=64,
+        num_stages=5,
+        strides=(1, 1, 1, 1, 1),
+        enc_num_convs=(2, 2, 2, 2, 2),
+        dec_num_convs=(2, 2, 2, 2),
+        downsamples=(True, True, True, True),
+        enc_dilations=(1, 1, 1, 1, 1),
+        dec_dilations=(1, 1, 1, 1),
+        with_cp=False,
+        conv_cfg=None,
+        norm_cfg=norm_cfg,
+        act_cfg=dict(type='ReLU'),
+        upsample_cfg=dict(type='InterpConv'),
+        norm_eval=False),
     decode_head=dict(
-        type='FCNHead',
-        in_channels=16,
-        in_index=-1,
+        type='ASPPHead',
+        in_channels=64,
+        in_index=4,
         channels=16,
-        num_convs=0,
-        concat_input=False,
+        dilations=(1, 12, 24, 36),
         dropout_ratio=0.1,
         num_classes=2,
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
+    auxiliary_head=dict(
+        type='FCNHead',
+        in_channels=128,
+        in_index=3,
+        channels=64,
+        num_convs=1,
+        concat_input=False,
+        dropout_ratio=0.1,
+        num_classes=2,
+        norm_cfg=norm_cfg,
+        align_corners=False,
+        loss_decode=dict(
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.4)),
     # model training and testing settings
     train_cfg=dict(),
-    test_cfg=dict(mode='whole'))
+    test_cfg=dict(
+        mode='whole'))

@@ -85,7 +85,7 @@ class EvalHook(_EvalHook):
                     gt_bytes = self.file_client.get(ann_filename)
                     gt_tensor = mmcv.imfrombytes(gt_bytes, flag='unchanged', backend='cv2').squeeze().astype(np.uint8)
                     gt_tensor_stack = cat((gt_tensor_stack, unsqueeze(Tensor(gt_tensor), 0)), 0)
-                if gt_tensor_stack.shape[0] > 15:
+                if gt_tensor_stack.shape[0] > 8:
                     break
 
         segmap_tensor_stack = unsqueeze(segmap_tensor_stack, 1)
