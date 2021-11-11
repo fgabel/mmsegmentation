@@ -710,13 +710,7 @@ class RandomRotate(object):
                  auto_bound=False):
         self.prob = prob
         assert prob >= 0 and prob <= 1
-        if isinstance(degree, (float, int)):
-            assert degree > 0, f'degree {degree} should be positive'
-            self.degree = (-degree, degree)
-        else:
-            self.degree = degree
-        assert len(self.degree) == 2, f'degree {self.degree} should be a ' \
-                                      f'tuple of (min, max)'
+        self.degree = degree
         self.pal_val = pad_val
         self.seg_pad_val = seg_pad_val
         self.center = center
@@ -733,7 +727,7 @@ class RandomRotate(object):
         """
 
         rotate = True if np.random.rand() < self.prob else False
-        degree = np.random.uniform(min(*self.degree), max(*self.degree))
+        degree = random.choice(self.degree)
         if rotate:
             # rotate image
             results['img'] = mmcv.imrotate(
