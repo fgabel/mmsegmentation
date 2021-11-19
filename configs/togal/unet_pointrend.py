@@ -59,12 +59,13 @@ test_pipeline = [
     dict(
         type='MultiScaleFlipAug',
         img_scale = (448, 448),
-        # img_ratios=[0.5, 0.75, 1.0, 1.25, 1.5, 1.75],
         flip=False,
         transforms=[
+            dict(type='Pad', size_divisor=50),
             dict(type='Normalize', **img_norm_cfg),
             dict(type='ImageToTensor', keys=['img']),
-            dict(type='Collect', keys=['img']),
+            dict(type='Collect', keys=['img'], meta_keys = ['filename', 'ori_filename', 'ori_shape',
+                 'img_shape', 'pad_shape', 'flip', 'flip_direction', 'img_norm_cfg']),
         ])
 ]
 data = dict(
