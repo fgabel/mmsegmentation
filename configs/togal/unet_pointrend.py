@@ -145,8 +145,8 @@ model = dict(
         num_points=2048, oversample_ratio=3, importance_sample_ratio=0.75),
     test_cfg=dict(
         mode='slide',
-        crop_size=(480, 480),
-        stride=(320, 320),
+        crop_size=(960, 960),
+        stride=(900, 900),
         subdivision_steps=2,
         subdivision_num_points=8196,
         scale_factor=2))
