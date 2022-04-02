@@ -1,6 +1,6 @@
-ARG PYTORCH="1.6.0"
-ARG CUDA="10.1"
-ARG CUDNN="7"
+ARG PYTORCH="1.11.0"
+ARG CUDA="11.3"
+ARG CUDNN="8"
 FROM pytorch/pytorch:${PYTORCH}-cuda${CUDA}-cudnn${CUDNN}-devel
 
 ARG MMCV="1.4.4"
@@ -21,7 +21,7 @@ ENV PATH="/opt/conda/bin:$PATH"
 RUN export FORCE_CUDA=1
 
 # TORCHSEVER
-RUN pip install torchserve torch-model-archiver
+RUN pip install torchserve torch-model-archiver nvgpu tensorboardX timm efficientnet_pytorch pretrainedmodels
 
 # MMLAB
 ARG PYTORCH
@@ -39,7 +39,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
 
 COPY config.properties /home/model-server/config.properties
 RUN mkdir /home/model-server/model-store && chown -R model-server /home/model-server/model-store
-
+COPY ml_doors.mar /home/model-server/model-store
 EXPOSE 8080 8081 8082
 
 USER model-server
